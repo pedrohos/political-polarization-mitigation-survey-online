@@ -1,0 +1,155 @@
+/* Main container for the introduction page */
+.introduction-container {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 2.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  color: #333;
+}
+
+/* General styling for section headings */
+.introduction-container h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+/* Set top margin for the first heading */
+.introduction-container h3:first-of-type {
+  margin-top: 0;
+}
+
+/* Styling for paragraphs and div containers used as paragraphs */
+.introduction-container p,
+.introduction-container .div-p {
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+/* Styling for ordered lists */
+.introduction-container ol {
+  padding-left: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.introduction-container ol li {
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+
+/* Styling for hyperlinks */
+.introduction-container a {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.introduction-container a:hover {
+  text-decoration: underline;
+}
+
+/* Styling for emphasized text */
+.introduction-container strong {
+  color: #c0392b; /* A distinct color for warnings/emphasis */
+  font-weight: 700;
+}
+
+/* The following are containers for custom components. */
+/* They add vertical spacing to separate them from other content. */
+.introduction-container .password-field-wrapper,
+.introduction-container .political-leaning-wrapper,
+.introduction-container .interests-matrix-wrapper {
+    margin-top: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Divider (alinhado ao questionnaire.css) */
+.divider {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 2rem 0;
+}
+
+/* Intro/landing styles harmonizados com o Questionnaire */
+.intro-wrapper {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 2rem 2rem 2.2rem;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.section-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.35rem;
+  line-height: 1.4;
+}
+
+.lead-paragraph {
+  margin-top: 0.5rem;
+  margin-bottom: 1.2rem;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+#password-field label {
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    margin-right: 0.6rem;
+    /* display: block; */
+}
+
+.notice {
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: #fff7e6;
+  border: 1px solid #f3d39b;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.consent-card {
+  margin-top: 0.75rem;
+  padding: 1rem 1.2rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.consent-link {
+  color: #0b5ed7;
+  text-decoration: none;
+  border-bottom: 1px dashed #0b5ed7;
+}
+.consent-link:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  color: #555;
+}
+
+/* Responsividade */
+@media (max-width: 640px) {
+  .intro-wrapper {
+    padding: 1.25rem 1rem 1.4rem;
+  }
+  .section-title {
+    font-size: 1.2rem;
+  }
+  .lead-paragraph {
+    font-size: 0.98rem;
+  }
+}

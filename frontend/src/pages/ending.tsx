@@ -1,19 +1,29 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import updateUserId from '@/components/common/UserId';
+import { useSearchParams } from 'next/navigation';
+import { SurveyPayload } from '@/components/common/Models';
 
 export default function EndingPage() {
     const router = useRouter();
-    type URLCodes = {
-        [dict_key: string]: string;
-    };
-    const urlCodes: URLCodes = {
-        'machine' : 'C1B3VICO',
-        'human' : 'CWRVAUTB',
-        'placebo' : 'C2Q0LH1X',
-        'default' : 'CKGSLL86'
-    }
-    const [participantId, setParticipantId] = useState('');
-    const [participantGroup, setParticpantGroup] = useState('');
+    const searchParams = useSearchParams();
+
+    // type URLCodes = {
+    //     [dict_key: string]: string;
+    // };
+    // const urlCodes: URLCodes = {
+    //     'machine' : 'C1B3VICO',
+    //     'human' : 'CWRVAUTB',
+    //     'placebo' : 'C2Q0LH1X',
+    //     'default' : 'CKGSLL86'
+    // }
+
+    const [password, setPassword] = useState<string>("");
+    const [prolificId, setProlificId] = useState<string>("");
+    const [participantId, setParticipantId] = useState<string>("");
+    // const [participantGroup, setParticpantGroup] = useState('');
+    
+    const [payload, setPayload] = useState<SurveyPayload | null>(null);
 
     const setParticipantStatus = async (pId: string, status: string) => {
         const response = await fetch('/api/set_participant_status/', {
@@ -26,13 +36,17 @@ export default function EndingPage() {
     };
 
     const endClick = () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const participantId = urlParams.get('PROLIFIC_PID');
-
-        setParticipantStatus((participantId ? participantId : ''), 'finished').then(() => {
-            const urlCode = urlCodes[participantGroup] || urlCodes['default'];
-            window.location.href = `https://app.prolific.com/submissions/complete?cc=${urlCode}`;
-        });
+        // TODO: Get participant id from payload or password and only set redirection if participant id equals prolific id
+        let redirectToProlific = false;
+        if (prolificId !== "") {
+            redirectToProlific = true;
+            if (redirectToProlific) {
+                const urlCode = "INSERT_HERE_COMPLETE_CODE";
+                window.location.href = `https://app.prolific.com/submissions/complete?cc=${urlCode}`;
+            }
+        } else {
+            alert("Parece que você não acessou o survey pelo Prolific. Se isso estiver certo, pode fechar a página, obrigado pela participação! Caso você seja um usuário do Prolific, por favor acesse novamente o link da pesquisa.");
+        }
     }
 
     const getParticipantGroup = async (pId: string) => {
@@ -42,23 +56,14 @@ export default function EndingPage() {
     };
 
     useEffect(() => {
-        const queryParams = new URLSearchParams(window.location.search);
-        const pId = queryParams.get("PROLIFIC_PID") || "";
-        setParticipantId(pId || "");
-        try {
-            getParticipantGroup(pId).then((data) => {
-                setParticpantGroup(data.group);
-            });
-        } catch (error) {
-            console.error(error);
-            router.push(`/ending/?PROLIFIC_PID=${participantId}`);
-        }
+        updateUserId(searchParams, setPayload, setProlificId, setParticipantId, setPassword, router);
+        
     }, []);
 
     return (
         <div id="ending">
             <h1>Muito obrigado pela sua participação!</h1>
-            <h3>Para finalizar o survey clique no botão abaixo para ser redirecionado
+            <h3>Para finalizar o survey clique no botão abaixo, caso você seja um usuário do prolific você será redirecionado
                 de volta ao Prolific.</h3>
             <button onClick={endClick}>Finalizar</button>
         </div>

@@ -2,304 +2,546 @@ import os
 import lib.utils as utils
 from dotenv import load_dotenv
 import mysql.connector
+from lib.models import Singleton, TreatmentType, ParticipantStatus, NEWS_CATEGORIES_TYPES
+import re
+from collections import OrderedDict
+import random
+import datetime
 
 load_dotenv()
-TABLE_SQLS = {
-    'participants': '''CREATE TABLE IF NOT EXISTS Participants (
-        ParticipantId VARCHAR(30) NOT NULL,
-        TreatmentGroup VARCHAR(7) NOT NULL,
-        PoliticalLeaning TINYINT(1),
-        Tweet1 CHAR(4) NOT NULL,
-        Tweet2 CHAR(4) NOT NULL,
-        Tweet3 CHAR(4) NOT NULL,
-        Tweet4 CHAR(4) NOT NULL,
-        ParticipantStatus VARCHAR(9) NOT NULL,
-        PRIMARY KEY (ParticipantId)
-        );''',
-    'sessions': '''CREATE TABLE IF NOT EXISTS Sessions (
-        SessionId VARCHAR(30) NOT NULL,
-        FK_ParticipantId VARCHAR(30) NOT NULL,
-        PRIMARY KEY (SessionId),
-        FOREIGN KEY (FK_ParticipantId) REFERENCES Participants(ParticipantId)
-        );''',
-    'Tweets': '''CREATE TABLE IF NOT EXISTS Tweets (
-        TweetId CHAR(4) NOT NULL,
-        TweetText VARCHAR(4000) NOT NULL,
-        PoliticalBias TINYINT(1) NOT NULL,
-        TreatmentGroup VARCHAR(7) NOT NULL,
-        Available TINYINT(1) NOT NULL,
-        FK_ParticipantId VARCHAR(30),
-        PRIMARY KEY (TweetId),
-        FOREIGN KEY (FK_ParticipantId) REFERENCES Participants(ParticipantId)
-        );''',
-    'RephrasedTweets': '''CREATE TABLE IF NOT EXISTS RephrasedTweets (
-        RepTweetId CHAR(5) NOT NULL,
-        FK_TweetId CHAR(4) NOT NULL,
-        RephrasedText VARCHAR(4000) NOT NULL,
-        TreatmentGroup VARCHAR(7) NOT NULL,
-        PRIMARY KEY (RepTweetId),
-        FOREIGN KEY (FK_TweetId) REFERENCES Tweets(TweetId)
-        )''',
-    'answers': '''CREATE TABLE IF NOT EXISTS Answers (
-        AnswerId VARCHAR(30) NOT NULL,
-        FK_ParticipantId VARCHAR(30) NOT NULL,
-        FK_SessionId VARCHAR(30) NOT NULL,
-        Text1 CHAR(5) NOT NULL,
-        Text2 CHAR(5) NOT NULL,
-        AnswerQ1 TINYINT(1),
-        AnswerQ2 TINYINT(1),
-        AnswerQ3 TINYINT(1),
-        AnswerQ4 TINYINT(1),
-        TimeSpent SMALLINT(5) NOT NULL,
-        PRIMARY KEY (AnswerId),
-        FOREIGN KEY (FK_ParticipantId) REFERENCES Participants(ParticipantId),
-        FOREIGN KEY (FK_SessionId) REFERENCES Sessions(SessionId)
-        )'''
-}
 
-def get_connection():
-    return mysql.connector.connect(
-    host = 'localhost',
-    user= 'root',
-    password = os.getenv('MYSQL_PASSWORD')
+class DBUtils(Singleton):
+    def __init__(self):
+        self.db_name = 'survey_db'
+        self.__initialize_database()
+    
+    def __get_connection(self):
+        return mysql.connector.connect(
+        host = 'localhost',
+        port=13306,
+        user= 'root',
+        password = os.getenv('MYSQL_PASSWORD')
     )
 
+    def __create_tables(self):
+        TABLE_SQLS = OrderedDict([
+            ('categories', '''CREATE TABLE IF NOT EXISTS NewsCategory (
+                NewsCategoryId INT NOT NULL AUTO_INCREMENT,
+                NewsCategoryName VARCHAR(50) NOT NULL UNIQUE,
+                PRIMARY KEY (NewsCategoryId)
+            );'''),
+            ('participants', '''CREATE TABLE IF NOT EXISTS Participants (
+                ParticipantId VARCHAR(255) NOT NULL,
+                ParticipantStatus VARCHAR(255) NOT NULL,
+                PoliticalLeaning TINYINT,
+                PRIMARY KEY (ParticipantId)
+            );'''),
+            ('participant_interests', '''CREATE TABLE IF NOT EXISTS ParticipantInterests (
+                FK_ParticipantId VARCHAR(255) NOT NULL,
+                FK_NewsCategoryId INT NOT NULL,
+                LevelOfInterest TINYINT NOT NULL,
+                PRIMARY KEY (FK_ParticipantId, FK_NewsCategoryId),
+                FOREIGN KEY (FK_NewsCategoryId) REFERENCES NewsCategory(NewsCategoryId),
+                FOREIGN KEY (FK_ParticipantId) REFERENCES Participants(ParticipantId)
+            );'''),
+            ('news', '''CREATE TABLE IF NOT EXISTS News (
+                NewsId CHAR(8) NOT NULL,
+                NewsText VARCHAR(7000) NOT NULL,
+                FK_NewsCategoryId INT NOT NULL,
+                PRIMARY KEY (NewsId),
+                FOREIGN KEY (FK_NewsCategoryId) REFERENCES NewsCategory(NewsCategoryId)
+            );'''),
+            ('verifications', '''CREATE TABLE IF NOT EXISTS Verifications (
+                VerificationId CHAR(20) NOT NULL,
+                VerificationText VARCHAR(10000) NOT NULL,
+                TreatmentType VARCHAR(7) NOT NULL,
+                Verdict VARCHAR(20) NOT NULL,
+                FK_NewsId CHAR(8) NOT NULL,
+                Num_Uses INT NOT NULL,
+                PRIMARY KEY (VerificationId),
+                FOREIGN KEY (FK_NewsId) REFERENCES News(NewsId)
+            );'''),
+            ('sessions', '''CREATE TABLE IF NOT EXISTS Sessions (
+                FK_ParticipantId VARCHAR(255) NOT NULL,
+                FK_VerificationId1 CHAR(20) NOT NULL,
+                FK_VerificationId2 CHAR(20) NOT NULL,
+                FK_VerificationId3 CHAR(20) NOT NULL,
+                FK_VerificationId4 CHAR(20) NOT NULL,
+                IsProlific TINYINT(1) NOT NULL,
+                StartTime DATETIME NOT NULL,
+                LastUpdateTime DATETIME NOT NULL,
+                PRIMARY KEY (FK_ParticipantId),
+                FOREIGN KEY (FK_ParticipantId) REFERENCES Participants(ParticipantId),
+                FOREIGN KEY (FK_VerificationId1) REFERENCES Verifications(VerificationId),
+                FOREIGN KEY (FK_VerificationId2) REFERENCES Verifications(VerificationId),
+                FOREIGN KEY (FK_VerificationId3) REFERENCES Verifications(VerificationId),
+                FOREIGN KEY (FK_VerificationId4) REFERENCES Verifications(VerificationId),
+                CONSTRAINT chk_unique_verifications
+                CHECK (FK_VerificationId1 <> FK_VerificationId2 AND
+                       FK_VerificationId1 <> FK_VerificationId3 AND
+                       FK_VerificationId1 <> FK_VerificationId4 AND
+                       FK_VerificationId2 <> FK_VerificationId3 AND
+                       FK_VerificationId2 <> FK_VerificationId4 AND
+                       FK_VerificationId3 <> FK_VerificationId4)
+            );'''),
+            ('answers', '''CREATE TABLE IF NOT EXISTS Answers (
+                FK_SessionId VARCHAR(255) NOT NULL,
+                FK_VerificationId CHAR(20) NOT NULL,
+                SEEN_ALEGATIONS TINYINT DEFAULT NULL,
+                CONFIDENCE_BEFORE_ALEGATIONS TINYINT DEFAULT NULL,
+                CONFIDENCE_AFTER_ALEGATIONS TINYINT DEFAULT NULL,
+                ANALYSIS_DEEP_ENOUGH TINYINT DEFAULT NULL,
+                CLEARNESS TINYINT DEFAULT NULL,
+                MATRIX_PERSUASIVENESS TINYINT DEFAULT NULL,
+                MATRIX_COHERENCE TINYINT DEFAULT NULL,
+                MATRIX_EASE_OF_READING TINYINT DEFAULT NULL,
+                MATRIX_COMMON_SENSE TINYINT DEFAULT NULL,
+                EndTime DATETIME NOT NULL,
+                TimeSpent INT NOT NULL,
+                PRIMARY KEY (FK_SessionId, FK_VerificationId),
+                FOREIGN KEY (FK_SessionId) REFERENCES Sessions(FK_ParticipantId) ON DELETE CASCADE,
+                FOREIGN KEY (FK_VerificationId) REFERENCES Verifications(VerificationId)
+            );''')
+        ])
 
-## database creation
-def create_database():
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("CREATE DATABASE IF NOT EXISTS survey_db")
-        create_tables()
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+
+            for table in TABLE_SQLS.values():
+                cur.execute(table)
+            con.commit()
+
+    def __initialize_categories(self):
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            for category in NEWS_CATEGORIES_TYPES:
+                cur.execute("INSERT IGNORE INTO NewsCategory (NewsCategoryName) VALUES (%s)", (category,))
+            con.commit()
+
+    def __initialize_database(self):
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"CREATE DATABASE IF NOT EXISTS {self.db_name}")
+            self.__create_tables()
+            self.__initialize_categories()
+
+   
+    # News Category
+    def create_news_category(self, category_name):
+        sql = ('INSERT INTO NewsCategory (NewsCategoryName)'
+            'VALUES (%s)')
+        args = (category_name,)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
+    
+    def get_news_category_id(self, category_name):
+        sql = ('SELECT NewsCategoryId FROM NewsCategory WHERE NewsCategoryName=%s')
+        args = (category_name,)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            res = cur.fetchone()[0]
+            return res
+
+    # News
+    def create_news(self, news_id, news_text, news_category_name):
+        news_category_id = self.get_news_category_id(news_category_name)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute("INSERT INTO News (NewsId, NewsText, FK_NewsCategoryId) VALUES (%s, %s, %s)", (news_id, news_text, news_category_id,))
+            con.commit()
+
+    # Verification
+    def create_verification(self, verification_id, verification_text, verdict, group, news_category_id):
+        sql = ('INSERT INTO Verifications (VerificationId, VerificationText, Verdict, TreatmentType, FK_NewsId, Num_Uses)'
+            'VALUES (%s, %s, %s, %s, %s, 0)')
+        args = (verification_id, verification_text, verdict, group, news_category_id)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
+
+    # Session
+    def create_session(self, participant_id, start_time, is_prolific: bool, seed: int = 42):
+        try:
+            # FK_NewsCategoryId, LevelOfInterest From ParticipantInterests
+            category_id_and_interest_level_pairs = self.get_participant_interests(participant_id)
+
+            # VerificationId, Num_Uses, FK_NewsCategoryId, TreatmentType From Verifications
+            verification_n_uses_and_category_id_pairs = self.get_verifications_n_uses_and_category()
+
+            human_group_data = []
+            machine_group_data = []
+            for (verification_id, n_uses, news_category_id, treatment_type) in verification_n_uses_and_category_id_pairs:
+                if treatment_type == TreatmentType.HUMAN.value:
+                    human_group_data.append((verification_id, n_uses, news_category_id, category_id_and_interest_level_pairs[news_category_id]))
+                elif treatment_type == TreatmentType.MACHINE.value:
+                    machine_group_data.append((verification_id, n_uses, news_category_id, category_id_and_interest_level_pairs[news_category_id]))
+                else:
+                    raise Exception(f"Unknown treatment type: {treatment_type}")
+
+            def get_sample(collection: list[tuple[str, int, str, str]], amount_to_retrieve: int) -> list[tuple[str, int, str, str]]:
+                assert amount_to_retrieve > 0
+                assert len(collection) >= amount_to_retrieve
+
+                # Get all elements with n_uses == 1
+                one_element_group = []
+                all_other_elements = []
+                for item in collection:
+                    n_uses = item[1]
+                    if n_uses == 1:
+                        one_element_group.append(item)
+                    else:
+                        all_other_elements.append(item)    
+
+                # Sort by interest level (asc), verification_id (asc)
+                one_element_group.sort(key=lambda item: (item[3], item[0]))  # Sort by verification_id
+
+                # Sort by interest level (asc), verification_id (asc)
+                all_other_elements.sort(key=lambda item: (item[3], item[0]))  # Sort by verification_id
+                
+                results = []
+                missing_data = amount_to_retrieve
+                if len(one_element_group) > 0:
+                    results.extend(random.sample(one_element_group, min(amount_to_retrieve, len(one_element_group))))
+                    missing_data -= len(results)
+                
+                if missing_data > 0:
+                    # Remove already selected elements in the step before to avoid repetition
+                    for single_res in results:
+                        if single_res in all_other_elements:
+                            all_other_elements.remove(single_res)
+                    results.extend(random.sample(all_other_elements, missing_data))
+                return results
+            
+
+            # The sorting is to ensure that the random selection is deterministic given the same seed
+            # No matter the order of the insertion in the database
+            human_group_data.sort(key= lambda item: (item[0], item[2]))
+            machine_group_data.sort(key= lambda item: (item[0], item[2]))
+
+            # Two samples are selected and shuffled in a controlled random manner from each group
+            random.seed(seed)
+            human_sample = get_sample(human_group_data, 2)
+            machine_sample = get_sample(machine_group_data, 2)
+            random_data = human_sample + machine_sample
+            random.shuffle(random_data)
+
+            verification_id1, verification_id2, verification_id3, verification_id4 = [item[0] for item in random_data]
+            is_prolific_int = 1 if is_prolific else 0
+
+            sql = ('INSERT INTO Sessions (FK_ParticipantId, IsProlific, StartTime, LastUpdateTime, FK_VerificationId1, FK_VerificationId2, FK_VerificationId3, FK_VerificationId4)'
+                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)')
+            # Last update time is initially the same as start time
+            args = (participant_id, is_prolific_int, start_time, start_time, verification_id1, verification_id2, verification_id3, verification_id4)
+            with self.__get_connection() as con:
+                cur = con.cursor()
+                cur.execute(f"USE {self.db_name}")
+                cur.execute(sql, args)
+                con.commit()
+
+            self.increase_verification_num_uses(verification_id1, 1)
+            self.increase_verification_num_uses(verification_id2, 1)
+            self.increase_verification_num_uses(verification_id3, 1)
+            self.increase_verification_num_uses(verification_id4, 1)
+        except Exception as e1:
+            try:
+                self.delete_participant_interests(participant_id)
+                self.update_participant_status(participant_id, 'new')
+            except Exception as e2:
+                raise e1
 
 
-def create_tables():
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute(TABLE_SQLS['participants'])
-        cur.execute(TABLE_SQLS['sessions'])
-        cur.execute(TABLE_SQLS['Tweets'])
-        cur.execute(TABLE_SQLS['RephrasedTweets'])
-        cur.execute(TABLE_SQLS['answers'])
-        add_constraint(cur)
+    def get_session(self, participant_id):
+        sql = ('SELECT FK_ParticipantId, FK_VerificationId1, FK_VerificationId2, FK_VerificationId3, FK_VerificationId4, StartTime, LastUpdateTime, IsProlific FROM Sessions WHERE FK_ParticipantId=%s')
+        args = (participant_id,)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            res = cur.fetchone()
+            if res:
+                return {
+                    'session_id': res[0],
+                    'verification_ids': [res[1], res[2], res[3], res[4]],
+                    'start_time': res[5],
+                    'last_update_time': res[6],
+                    'is_prolific': bool(res[7])
+                }
+            else:
+                return None
 
+    def update_session_last_update_time(self, participant_id, new_time):
+        sql = ('UPDATE Sessions SET LastUpdateTime=%s WHERE FK_ParticipantId=%s')
+        args = (new_time, participant_id)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
 
-def add_constraint(cur):
-    constraints = [
-        ("FK_Tweet1", "Tweet1"),
-        ("FK_Tweet2", "Tweet2"),
-        ("FK_Tweet3", "Tweet3"),
-        ("FK_Tweet4", "Tweet4"),
-    ]
-    for constraint_name, column_name in constraints:
-        cur.execute(f'''
-            ALTER TABLE Participants
-            ADD CONSTRAINT {constraint_name}
-            FOREIGN KEY ({column_name}) REFERENCES Tweets(TweetId)
-        ''')
+    def delete_session(self, participant_id):
+        session_res = self.get_session(participant_id)
 
+        # Decrement the Num_Uses of the verifications associated with the session
+        for verification_id in session_res['verification_ids']:
+            self.increase_verification_num_uses(verification_id, -1)
 
-def add_tweet(id, text, bias, group):
-    sql = ('INSERT INTO Tweets (TweetId, TweetText, PoliticalBias, TreatmentGroup, Available)'
-        'VALUES (%s, %s, %s, %s, 1)')
-    args = (id, text, bias, group)
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute(sql, args)
-        con.commit()
+        sql = ('DELETE FROM Sessions WHERE FK_ParticipantId=%s')
+        args = (participant_id,)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
 
+    # Participant
+    def create_participant(self, participant_id, political_leaning, status = ParticipantStatus.NEW.value):
+        sql = ('INSERT INTO Participants (ParticipantId, ParticipantStatus, PoliticalLeaning)'
+            'VALUES (%s, %s, %s)')
+        args = (participant_id, status, political_leaning)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
+    
+    def get_participant_status(self, participant_id):
+        sql = ('SELECT ParticipantStatus FROM Participants WHERE ParticipantId=%s')
+        args = (participant_id,)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            res = cur.fetchone()
+            return res[0] if res else None
+    
+    def get_participant_interests(self, participant_id):
+        sql = (
+            'SELECT '
+                'FK_NewsCategoryId, LevelOfInterest '
+            'FROM '
+                'ParticipantInterests '
+            'WHERE '
+                'FK_ParticipantId=%s'
+            )
+        args = (participant_id,)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            res = cur.fetchall()
+            return {row[0]: row[1] for row in res} if res else {}
 
-def add_rephrased_tweet(id, tweet_id, text, group):
-    sql = ('INSERT INTO RephrasedTweets (RepTweetId, FK_TweetId, RephrasedText, TreatmentGroup)'
-        'VALUES (%s, %s, %s, %s)')
-    args = (id, tweet_id, text, group)
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute(sql, args)
-        con.commit()
+    def update_participant_status(self, participant_id, status):
+        assert status in [status.value for status in ParticipantStatus], "Invalid status"
+        sql = ('UPDATE Participants SET ParticipantStatus=%s WHERE ParticipantId=%s')
+        args = (status, participant_id)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
+    
+    # Participant Interests
+    def create_participant_interests(self, participant_id, interests_matrix: list[int]):
+        sql = ('INSERT INTO ParticipantInterests (FK_ParticipantId, FK_NewsCategoryId, LevelOfInterest)'
+            'VALUES (%s, %s, %s)')
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            for idx, interest_level in enumerate(interests_matrix):
+                category_name = NEWS_CATEGORIES_TYPES[idx]
+                category_id = self.get_news_category_id(category_name)  # Ensure category exists
+                args = (participant_id, category_id, interest_level)
+                cur.execute(sql, args)
+            con.commit()
 
+    def delete_participant_interests(self, participant_id):
+        sql = ('DELETE FROM ParticipantInterests WHERE FK_ParticipantId=%s')
+        args = (participant_id,)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
 
-## data checking
-def get_group_counts():
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT COUNT(*) FROM Participants WHERE TreatmentGroup='human'")
-        h_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM Participants WHERE TreatmentGroup='machine'")
-        m_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM Participants WHERE TreatmentGroup='placebo'")
-        p_count = cur.fetchone()[0]
-    return h_count, m_count, p_count
+    # Answer
+    def create_answer(self, session_id, page_number):
+        verification_id = self.__get_verification_id(session_id, page_number)
+        sql = ('INSERT INTO '
+                    'Answers (FK_SessionId, FK_VerificationId, SEEN_ALEGATIONS, CONFIDENCE_BEFORE_ALEGATIONS, CONFIDENCE_AFTER_ALEGATIONS, ANALYSIS_DEEP_ENOUGH, CLEARNESS, MATRIX_PERSUASIVENESS, MATRIX_COHERENCE, MATRIX_EASE_OF_READING, MATRIX_COMMON_SENSE, EndTime, TimeSpent) '
+                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)')
+        args = (session_id, verification_id, 0, 0, 0, 0, 0, 0, 0, 0, 0, str(datetime.datetime.now()), 0)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
 
+    def update_answer(self, participant_hash, page_number, answers):
+        verification_id = self.__get_verification_id(participant_hash, page_number)
+        end_time = str(datetime.datetime.now())
+        sql = ('UPDATE Answers SET SEEN_ALEGATIONS=%s, CONFIDENCE_BEFORE_ALEGATIONS=%s, CONFIDENCE_AFTER_ALEGATIONS=%s, ANALYSIS_DEEP_ENOUGH=%s, CLEARNESS=%s, MATRIX_PERSUASIVENESS=%s, MATRIX_COHERENCE=%s, MATRIX_EASE_OF_READING=%s, MATRIX_COMMON_SENSE=%s, EndTime=%s WHERE FK_SessionId=%s AND FK_VerificationId=%s')
+        args = (
+            answers.get('question_sa'),
+            answers.get('question_cba'),
+            answers.get('question_caa'),
+            answers.get('question_de'),
+            answers.get('question_cl'),
+            answers.get('matrix_pe'),
+            answers.get('matrix_co'),
+            answers.get('matrix_er'),
+            answers.get('matrix_cs'),
+            end_time,
+            participant_hash,
+            verification_id
+        )
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            con.commit()
 
-def check_participant(id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT ParticipantStatus FROM Participants WHERE ParticipantId=%s", (id,))
-        result = cur.fetchone()
-        return {'status': result[0] if result else False}
+    def get_answer(self, participant_id, page_number):
+        verification_id = self.__get_verification_id(participant_id, page_number)
+        sql = ('SELECT SEEN_ALEGATIONS, CONFIDENCE_BEFORE_ALEGATIONS, CONFIDENCE_AFTER_ALEGATIONS, ANALYSIS_DEEP_ENOUGH, CLEARNESS, MATRIX_PERSUASIVENESS, MATRIX_COHERENCE, MATRIX_EASE_OF_READING, MATRIX_COMMON_SENSE, EndTime, TimeSpent FROM Answers WHERE FK_SessionId=%s AND FK_VerificationId=%s')
+        args = (participant_id, verification_id,)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            res = cur.fetchone()
+            if res:
+                return {
+                    "question_sa": res[0],
+                    "question_cba": res[1],
+                    "question_caa": res[2],
+                    "question_de": res[3],
+                    "question_cl": res[4],
+                    "matrix_pe": res[5],
+                    "matrix_co": res[6],
+                    "matrix_er": res[7],
+                    "matrix_cs": res[8],
+                    "end_time": res[9],
+                    "time_spent": res[10]
+                }
+            else:
+                return None
+        
+    # Utils
+    def get_participant_answer_time(self, participant_id):
+        sql = ('SELECT StartTime, LastUpdateTime FROM Sessions WHERE FK_ParticipantId=%s')
+        args = (participant_id,)
+        participant_status = self.get_participant_status(participant_id)
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, args)
+            res = cur.fetchone()
+            if res:
+                return {"answer_time_s": (res[1] - res[0]).seconds, "participant_status": participant_status}
+            else:
+                return None
 
+    def invalidate_session_partially(self, participant_id):
+        self.delete_participant_interests(participant_id)
+        self.update_participant_status(participant_id, 'new')
 
-def get_available_tweets(treatment_group):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT TweetId FROM Tweets WHERE Available=1 and TreatmentGroup=%s", (treatment_group,))
-        return [row[0] for row in cur.fetchall()]
+    def invalidate_session(self, participant_id):
+        self.delete_session(participant_id)
+        self.delete_participant_interests(participant_id)
+        self.update_participant_status(participant_id, 'new')
 
+    def check_session_is_valid(self, participant_id):
+        session_res = self.get_session(participant_id)
+        session_exists = session_res is not None
+        is_valid = None
+        is_prolific = None
+        inside_time_limit = None
 
-def get_participant_tweets(id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT Tweet1, Tweet2, Tweet3, Tweet4 FROM Participants WHERE ParticipantId=%s", (id,))
-        return cur.fetchone()
+        if session_res:
+            if session_res["is_prolific"]:
+                is_valid = True
+            else:
+                inside_time_limit = session_res["last_update_time"] + datetime.timedelta(minutes=20) > datetime.datetime.now()
+                is_valid = inside_time_limit
+        else:
+            is_valid = False
+        return {"is_valid": is_valid, "is_prolific": is_prolific, "inside_time_limit": inside_time_limit, "session_exists": session_exists}
+        
+    def get_group_counts(self):
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(f"SELECT COUNT(*) FROM Participants WHERE TreatmentGroup='{TreatmentType.HUMAN.value}'")
+            h_count = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(*) FROM Participants WHERE TreatmentGroup='{TreatmentType.MACHINE.value}'")
+            m_count = cur.fetchone()[0]
+        return h_count, m_count
 
+    def __get_verification_id(self, participant_id, page_number):
+        assert page_number in [1, 2, 3, 4], "ERROR: get_verification_id requires page_number to be between 1 and 4"
+        res = None
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            
+            cur.execute(f"SELECT FK_VerificationId{str(page_number)} FROM Sessions WHERE FK_ParticipantId=%s", (participant_id,))
+            res = cur.fetchone()
+            if res:
+                res = res[0]
+        return res
 
-def get_participant_group(id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT TreatmentGroup FROM Participants WHERE ParticipantId=%s", (id,))
-        return cur.fetchone()[0]
+    def get_verification_data(self, participant_id, page_number):
+        assert page_number in [1, 2, 3, 4], "ERROR: get_verification_data requires page_number to be between 1 and 4"
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            
+            verification_id = self.__get_verification_id(participant_id, page_number)
+            if verification_id:
+                cur.execute("SELECT V.VerificationText, V.TreatmentType, N.NewsText, V.Verdict "
+                "FROM Verifications V JOIN News N ON V.FK_NewsId = N.NewsId WHERE V.VerificationId=%s", (verification_id,))
+                verification_data = cur.fetchone()
+                if verification_data:
+                    res = {
+                        "verification_text": verification_data[0],
+                        "treatment_type": verification_data[1],
+                        "news_text": verification_data[2],
+                        "verdict": verification_data[3]
+                    }
+                    return res
+            return None
 
-
-def get_tweet(id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT TweetText FROM Tweets WHERE TweetId=%s", (id,))
-        return cur.fetchone()
-
-
-def get_rephrased(id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT RephrasedText FROM RephrasedTweets WHERE RepTweetId=%s", (id,))
-        return cur.fetchone()
-
-
-def get_rephrased_id(id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT RepTweetId FROM RephrasedTweets WHERE FK_TweetId=%s", (id,))
-        return cur.fetchone()
-
-
-def get_text(id):
-    if (len(id) == 4):
-        return get_tweet(id)[0]
-    else:
-        return get_rephrased(id)[0]
-
-
-def check_answer(id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT Text1, Text2, TimeSpent FROM Answers WHERE AnswerId=%s", (id,))
-        response = cur.fetchone()
-        return {'text1': response[0], 'text2': response[1], 'time': response[2]} if response else False
-
-
-def get_shuffled_texts(id, tweet_number):
-    current_tweet = get_participant_tweets(id)[tweet_number-1]
-    current_rephrased = get_rephrased_id(current_tweet)[0]
-    shuffle_ids = utils.shuffle_texts([current_tweet, current_rephrased])
-    return {'text1': shuffle_ids[0], 'text2': shuffle_ids[1]}
-
-
-def get_texts(id_1, id_2):
-    return {'text1': get_text(id_1), 'text2': get_text(id_2)}
-
-
-def get_answer(id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("SELECT Text1, Text2, AnswerQ1, AnswerQ2, AnswerQ3, AnswerQ4, TimeSpent FROM Answers WHERE AnswerId=%s", (id,))
-        response = cur.fetchone()
-        return {'text1': get_text(response[0]), 'text2': get_text(response[1]),'q1': response[2], 'q2': response[3], 'q3': response[4], 'q4': response[5], 'time': response[6]} if response else False
-
-
-## data manipulation
-def set_assigned_tweets(p_id, t_id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        for id in t_id:
-            cur.execute("UPDATE Tweets SET FK_ParticipantId=%s, Available=0 WHERE TweetId=%s", (p_id, id))
-        con.commit()
-
-
-def add_session(p_id, s_id):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("INSERT IGNORE INTO Sessions (SessionId, FK_ParticipantId) VALUES (%s, %s)", (s_id, p_id))
-        con.commit()
-
-
-def add_participant(id):
-    h_count, m_count, p_count = get_group_counts()
-    assigned_group = utils.select_group(h_count, m_count, p_count)
-    assigned_tweets = utils.select_tweets(get_available_tweets(assigned_group))
-    sql = ('INSERT INTO Participants (ParticipantId, TreatmentGroup, Tweet1, Tweet2, Tweet3, Tweet4, ParticipantStatus)'
-            'VALUES (%s, %s, %s, %s, %s, %s, %s)')
-    args = (id, assigned_group, assigned_tweets[0], assigned_tweets[1],
-            assigned_tweets[2], assigned_tweets[3], 'started')
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute(sql, args)
-        con.commit()
-    set_assigned_tweets(id, assigned_tweets)
-
-
-def set_participant_leaning(id, leaning):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("UPDATE Participants SET PoliticalLeaning=%s, ParticipantStatus='tweet_1' WHERE ParticipantId=%s", (leaning, id))
-        con.commit()
-
-
-def create_answer(p_id, s_id, tweet_number):
-    answer_id = p_id + 'T' + str(tweet_number)
-    shuffled_text_ids = get_shuffled_texts(p_id, tweet_number)
-    text_1 = get_text(shuffled_text_ids['text1'])
-    text_2 = get_text(shuffled_text_ids['text2'])
-    sql = ('INSERT INTO Answers (AnswerId, FK_ParticipantId, FK_SessionId, Text1, Text2, TimeSpent)'
-    'VALUES (%s, %s, %s, %s, %s, %s)')
-    args = (answer_id, p_id, s_id, shuffled_text_ids['text1'], shuffled_text_ids['text2'], 0)
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute(sql, args)
-        con.commit()
-    return {'text1': text_1, 'text2': text_2}
-
-
-def set_answers(a_id, answers):
-    sql = ('UPDATE Answers SET AnswerQ1=%s, AnswerQ2=%s, AnswerQ3=%s, AnswerQ4=%s, TimeSpent=%s WHERE AnswerId=%s')
-    args = (answers['q1'], answers['q2'], answers['q3'], answers['q4'], answers['timeSpent'],a_id)
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute(sql, args)
-        con.commit()
-
-
-def set_participant_status(id, status):
-    with get_connection() as con:
-        cur = con.cursor()
-        cur.execute("USE survey_db")
-        cur.execute("UPDATE Participants SET ParticipantStatus=%s WHERE ParticipantId=%s", (status, id))
-        con.commit()
+    def increase_verification_num_uses(self, verification_id, amount: int = 1):
+        sql = ('SELECT Num_Uses FROM Verifications WHERE VerificationId=%s')
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute(sql, (verification_id,))
+            res = cur.fetchone()
+            if res:
+                current_uses = res[0]
+                new_uses = current_uses + amount
+                sql_update = ('UPDATE Verifications SET Num_Uses=%s WHERE VerificationId=%s')
+                args_update = (new_uses, verification_id)
+                cur.execute(sql_update, args_update)
+                con.commit()
+            else:
+                raise ValueError(f"VerificationId {verification_id} not found")
+        
+    def get_verifications_n_uses_and_category(self):
+        with self.__get_connection() as con:
+            cur = con.cursor()
+            cur.execute(f"USE {self.db_name}")
+            cur.execute("SELECT V.VerificationId, V.Num_Uses, N.FK_NewsCategoryID, V.TreatmentType FROM Verifications V INNER JOIN News N ON V.FK_NewsId = N.NewsId")
+            return [(row[0], row[1], row[2], row[3]) for row in cur.fetchall()]

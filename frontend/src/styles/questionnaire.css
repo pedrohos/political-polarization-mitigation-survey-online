@@ -1,0 +1,189 @@
+/* Main container for the survey */
+.questionnaire-wrapper {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+}
+
+/* Section for displaying text (news, verification) */
+.text-section {
+  margin-bottom: 2rem;
+  margin-right: 1.5rem;
+}
+
+.text-section label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+  display: flex;
+}
+
+.text-pane {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.verdict-wrapper {
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.verdict-text {
+  font-weight: bold;
+  font-size: 1.25rem;
+  margin-bottom: 0.4rem;
+  color: #0056b3;
+}
+
+/* Divider for separating sections */
+.divider {
+    border: none;
+    border-top: 1px solid #e0e0e0;
+    margin: 2.5rem 0;
+}
+
+/* Container for all questions */
+.questions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+/* A single question block */
+.question-block {
+  width: 100%;
+}
+
+.question-text {
+  font-size: 1.1rem;
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+/* Grid layout for the scale options */
+.scale-grid-new {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  overflow: hidden;
+  
+  text-align: center;
+}
+
+/* .scale-grid-new {
+  --cols: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(60px, 1fr));
+  gap: 0.6rem 1rem;
+  align-items: start;
+  justify-items: center;
+} */
+
+/* .scale-grid-new {
+  --cols: 2;
+  grid-template-columns: repeat(var(--cols), minmax(90px, 1fr));
+  gap: 1rem 1.4rem;
+} */
+
+
+/* .scale-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+} */
+
+.scale-likert .scale-label-new {
+  font-weight: 500;
+}
+
+@media (max-width: 1100px) {
+  .questions-section {
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .question-block-new {
+    max-width: 100%;
+  }
+
+  .scale-label-new {
+    font-size: 0.65rem;
+  }
+}
+
+@media (max-width: 680px) {
+  .text-panes {
+    flex-direction: column;
+  }
+
+  .scale-label-new {
+    font-size: 0.62rem;
+  }
+}
+
+.scale-label-new {
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background-color: #f5f5f5;
+  border-bottom: 0px solid #ccc;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scale-opt-new {
+  padding: 0.75rem;
+  background-color: #fff;
+}
+
+/* Alternating background colors for readability */
+.tone-alt {
+  background-color: #f0f0f0;
+}
+
+/* Style for the matrix question table */
+.matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.matrix-table th, .matrix-table td {
+    border: 1px solid #ddd;
+    padding: 0.75rem;
+    text-align: center;
+}
+
+.matrix-table th {
+    background-color: #f5f5f5;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.matrix-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+    background-color: #f9f9f9;
+}
+
+.matrix-table input[type="radio"] {
+    cursor: pointer;
+}
