@@ -1,6 +1,6 @@
 services:
-  frontend:
   mysql:
+    container_name: mysql
     image: mysql:8
     # restart: no
     environment:
@@ -14,3 +14,90 @@ services:
       - ./db/data:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./db/my.cnf:/etc/mysql/my.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - survey-network
+
+  backend:
+    container_name: backend
+    build:
+      context: ./backend
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: survey_db
+      DB_USER: myuser
+      DB_PASSWORD: password
+      FRONTEND_HOST: frontend
+      FRONTEND_PORT: 3000
+      BACKEND_PORT: 5000
+    ports:
+      - "8001:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - survey-network
+
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+    ports:
+      - "3001:3000"
+    environment:
+      NEXT_PUBLIC_BACKEND_HOST: backend
+      NEXT_PUBLIC_BACKEND_PORT: 5000
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - survey-network
+  
+  backend-test:
+    container_name: backend-test
+    build:
+      context: ./backend
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: survey_db_test
+      DB_USER: myuser
+      DB_PASSWORD: password
+      FRONTEND_HOST: frontend-test
+      FRONTEND_PORT: 3000
+      BACKEND_PORT: 5000
+    ports:
+      - "8010:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - survey-network
+
+  frontend-test:
+    container_name: frontend-test
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_BACKEND_HOST: backend-test
+      NEXT_PUBLIC_BACKEND_PORT: 5000
+    ports:
+      - "3010:3000"
+    depends_on:
+      backend-test:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    networks:
+      - survey-network
+
+networks:
+  survey-network:
+    driver: bridge

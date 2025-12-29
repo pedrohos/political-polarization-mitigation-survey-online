@@ -235,3 +235,6 @@ next-env.d.ts
 
 # Database
 db/*
+
+# Db data
+backend/data/sample/*

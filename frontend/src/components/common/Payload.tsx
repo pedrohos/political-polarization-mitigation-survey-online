@@ -1,9 +1,6 @@
-export default function pushPayload (password: string) {
-    const payload = {
-      password: password,
-    };
+export default function pushPayload (userSessionID: string) {
     if (typeof window !== "undefined") {
-      sessionStorage.setItem("survey:payload", JSON.stringify(payload));
+      sessionStorage.setItem('userSessionID', userSessionID);
     } else {
       throw new Error("No window object");
     }

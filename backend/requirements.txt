@@ -21,3 +21,4 @@ typing_extensions==4.12.2
 tzdata==2024.1
 Werkzeug==3.0.3
 bcrypt==4.1.0
+pydantic==2.10.*

@@ -8,11 +8,11 @@ os.chdir(os.path.dirname(__file__))
 DATA_DIR = '../data/database/'
 
 load_dotenv()
-engine = create_engine('mysql+mysqlconnector://root:{}@localhost:3306/survey_db'.format(os.getenv('MYSQL_PASSWORD')))
+engine = create_engine('mysql+mysqlconnector://root:{}@{}:{}/{}'.format(os.getenv('MYSQL_PASSWORD'), os.getenv('DB_HOST'), os.getenv('DB_PORT'), os.getenv('DB_NAME')))
 
 def export_to_sql():
     print('Generating sql file...')
-    os.system('mysqldump -u root -p{} survey_db > {}survey_db.sql'.format(os.getenv('MYSQL_PASSWORD'), DATA_DIR))
+    os.system('mysqldump -u root -p{} {} > {}{}.sql'.format(os.getenv('MYSQL_PASSWORD'), os.getenv('DB_NAME'), DATA_DIR, os.getenv('DB_NAME')))
     print('SQL file generated.')
 
 

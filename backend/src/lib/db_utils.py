@@ -1,8 +1,8 @@
 import os
-import lib.utils as utils
+import src.lib.utils as utils
 from dotenv import load_dotenv
 import mysql.connector
-from lib.models import Singleton, TreatmentType, ParticipantStatus, NEWS_CATEGORIES_TYPES
+from src.lib.models import Singleton, TreatmentType, ParticipantStatus, NEWS_CATEGORIES_TYPES
 import re
 from collections import OrderedDict
 import random
@@ -12,16 +12,16 @@ load_dotenv()
 
 class DBUtils(Singleton):
     def __init__(self):
-        self.db_name = 'survey_db'
+        self.db_name = os.getenv('DB_NAME')
         self.__initialize_database()
     
     def __get_connection(self):
         return mysql.connector.connect(
-        host = 'localhost',
-        port=13306,
-        user= 'root',
-        password = os.getenv('MYSQL_PASSWORD')
-    )
+            host = os.getenv('DB_HOST'),
+            port=os.getenv('DB_PORT'),
+            user= 'root',
+            password = os.getenv('MYSQL_PASSWORD')
+        )
 
     def __create_tables(self):
         TABLE_SQLS = OrderedDict([
@@ -53,7 +53,7 @@ class DBUtils(Singleton):
             );'''),
             ('verifications', '''CREATE TABLE IF NOT EXISTS Verifications (
                 VerificationId CHAR(20) NOT NULL,
-                VerificationText VARCHAR(10000) NOT NULL,
+                VerificationText TEXT(50000) NOT NULL,
                 TreatmentType VARCHAR(7) NOT NULL,
                 Verdict VARCHAR(20) NOT NULL,
                 FK_NewsId CHAR(8) NOT NULL,
@@ -91,13 +91,14 @@ class DBUtils(Singleton):
                 CONFIDENCE_BEFORE_ALEGATIONS TINYINT DEFAULT NULL,
                 CONFIDENCE_AFTER_ALEGATIONS TINYINT DEFAULT NULL,
                 ANALYSIS_DEEP_ENOUGH TINYINT DEFAULT NULL,
-                CLEARNESS TINYINT DEFAULT NULL,
                 MATRIX_PERSUASIVENESS TINYINT DEFAULT NULL,
                 MATRIX_COHERENCE TINYINT DEFAULT NULL,
-                MATRIX_EASE_OF_READING TINYINT DEFAULT NULL,
                 MATRIX_COMMON_SENSE TINYINT DEFAULT NULL,
-                EndTime DATETIME NOT NULL,
-                TimeSpent INT NOT NULL,
+                MATRIX_RANK_SQ TINYINT DEFAULT NULL,
+                MATRIX_RANK_PC TINYINT DEFAULT NULL,
+                MATRIX_RANK_TC TINYINT DEFAULT NULL,
+                MATRIX_RANK_CS TINYINT DEFAULT NULL,
+                MATRIX_RANK_NE TINYINT DEFAULT NULL,
                 PRIMARY KEY (FK_SessionId, FK_VerificationId),
                 FOREIGN KEY (FK_SessionId) REFERENCES Sessions(FK_ParticipantId) ON DELETE CASCADE,
                 FOREIGN KEY (FK_VerificationId) REFERENCES Verifications(VerificationId)
@@ -291,17 +292,18 @@ class DBUtils(Singleton):
     def delete_session(self, participant_id):
         session_res = self.get_session(participant_id)
 
-        # Decrement the Num_Uses of the verifications associated with the session
-        for verification_id in session_res['verification_ids']:
-            self.increase_verification_num_uses(verification_id, -1)
+        if session_res is not None:
+            # Decrement the Num_Uses of the verifications associated with the session
+            for verification_id in session_res['verification_ids']:
+                self.increase_verification_num_uses(verification_id, -1)
 
-        sql = ('DELETE FROM Sessions WHERE FK_ParticipantId=%s')
-        args = (participant_id,)
-        with self.__get_connection() as con:
-            cur = con.cursor()
-            cur.execute(f"USE {self.db_name}")
-            cur.execute(sql, args)
-            con.commit()
+            sql = ('DELETE FROM Sessions WHERE FK_ParticipantId=%s')
+            args = (participant_id,)
+            with self.__get_connection() as con:
+                cur = con.cursor()
+                cur.execute(f"USE {self.db_name}")
+                cur.execute(sql, args)
+                con.commit()
 
     # Participant
     def create_participant(self, participant_id, political_leaning, status = ParticipantStatus.NEW.value):
@@ -378,33 +380,57 @@ class DBUtils(Singleton):
     def create_answer(self, session_id, page_number):
         verification_id = self.__get_verification_id(session_id, page_number)
         sql = ('INSERT INTO '
-                    'Answers (FK_SessionId, FK_VerificationId, SEEN_ALEGATIONS, CONFIDENCE_BEFORE_ALEGATIONS, CONFIDENCE_AFTER_ALEGATIONS, ANALYSIS_DEEP_ENOUGH, CLEARNESS, MATRIX_PERSUASIVENESS, MATRIX_COHERENCE, MATRIX_EASE_OF_READING, MATRIX_COMMON_SENSE, EndTime, TimeSpent) '
-                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)')
-        args = (session_id, verification_id, 0, 0, 0, 0, 0, 0, 0, 0, 0, str(datetime.datetime.now()), 0)
+                    'Answers ('
+                    'FK_SessionId, FK_VerificationId, SEEN_ALEGATIONS, '
+                    'CONFIDENCE_BEFORE_ALEGATIONS, CONFIDENCE_AFTER_ALEGATIONS, ANALYSIS_DEEP_ENOUGH, '
+                    'MATRIX_PERSUASIVENESS, MATRIX_COHERENCE, MATRIX_COMMON_SENSE, '
+                    'MATRIX_RANK_SQ, MATRIX_RANK_PC, MATRIX_RANK_TC, '
+                    'MATRIX_RANK_CS, MATRIX_RANK_NE) '
+                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)')
+        args = (session_id, verification_id, *[0 for _ in range(12)])
         with self.__get_connection() as con:
             cur = con.cursor()
             cur.execute(f"USE {self.db_name}")
             cur.execute(sql, args)
             con.commit()
 
-    def update_answer(self, participant_hash, page_number, answers):
+    def update_answer(self, participant_hash, page_number, answers, in_initial_question):
         verification_id = self.__get_verification_id(participant_hash, page_number)
-        end_time = str(datetime.datetime.now())
-        sql = ('UPDATE Answers SET SEEN_ALEGATIONS=%s, CONFIDENCE_BEFORE_ALEGATIONS=%s, CONFIDENCE_AFTER_ALEGATIONS=%s, ANALYSIS_DEEP_ENOUGH=%s, CLEARNESS=%s, MATRIX_PERSUASIVENESS=%s, MATRIX_COHERENCE=%s, MATRIX_EASE_OF_READING=%s, MATRIX_COMMON_SENSE=%s, EndTime=%s WHERE FK_SessionId=%s AND FK_VerificationId=%s')
-        args = (
-            answers.get('question_sa'),
-            answers.get('question_cba'),
-            answers.get('question_caa'),
-            answers.get('question_de'),
-            answers.get('question_cl'),
-            answers.get('matrix_pe'),
-            answers.get('matrix_co'),
-            answers.get('matrix_er'),
-            answers.get('matrix_cs'),
-            end_time,
-            participant_hash,
-            verification_id
-        )
+        if in_initial_question:
+            sql = ('UPDATE '
+                    'Answers SET '
+                    'SEEN_ALEGATIONS=%s, CONFIDENCE_BEFORE_ALEGATIONS=%s '
+                'WHERE '
+                    'FK_SessionId=%s AND FK_VerificationId=%s')
+            args = (
+                answers.get('question_sa'),
+                answers.get('question_cba'),
+                participant_hash,
+                verification_id
+            )
+        else:
+            sql = ('UPDATE '
+                    'Answers SET '
+                    'CONFIDENCE_AFTER_ALEGATIONS=%s, ANALYSIS_DEEP_ENOUGH=%s, MATRIX_PERSUASIVENESS=%s, '
+                    'MATRIX_COHERENCE=%s, MATRIX_COMMON_SENSE=%s, MATRIX_RANK_SQ=%s, '
+                    'MATRIX_RANK_PC=%s, MATRIX_RANK_TC=%s, MATRIX_RANK_CS=%s, '
+                    'MATRIX_RANK_NE=%s '
+                'WHERE '
+                    'FK_SessionId=%s AND FK_VerificationId=%s')
+            args = (
+                answers.get('question_caa'),
+                answers.get('question_de'),
+                answers.get('matrix_pe'),
+                answers.get('matrix_co'),
+                answers.get('matrix_cs'),
+                answers.get('matrix_rank_sq'),
+                answers.get('matrix_rank_pc'),
+                answers.get('matrix_rank_tc'),
+                answers.get('matrix_rank_cs'),
+                answers.get('matrix_rank_ne'),
+                participant_hash,
+                verification_id
+            )
         with self.__get_connection() as con:
             cur = con.cursor()
             cur.execute(f"USE {self.db_name}")
@@ -413,7 +439,13 @@ class DBUtils(Singleton):
 
     def get_answer(self, participant_id, page_number):
         verification_id = self.__get_verification_id(participant_id, page_number)
-        sql = ('SELECT SEEN_ALEGATIONS, CONFIDENCE_BEFORE_ALEGATIONS, CONFIDENCE_AFTER_ALEGATIONS, ANALYSIS_DEEP_ENOUGH, CLEARNESS, MATRIX_PERSUASIVENESS, MATRIX_COHERENCE, MATRIX_EASE_OF_READING, MATRIX_COMMON_SENSE, EndTime, TimeSpent FROM Answers WHERE FK_SessionId=%s AND FK_VerificationId=%s')
+        sql = ('SELECT '
+                    'SEEN_ALEGATIONS, CONFIDENCE_BEFORE_ALEGATIONS, CONFIDENCE_AFTER_ALEGATIONS,'
+                    'ANALYSIS_DEEP_ENOUGH, MATRIX_PERSUASIVENESS, MATRIX_COHERENCE,'
+                    'MATRIX_COMMON_SENSE, MATRIX_RANK_SQ, MATRIX_RANK_PC,'
+                    'MATRIX_RANK_TC, MATRIX_RANK_CS, MATRIX_RANK_NE '
+                'FROM Answers WHERE '
+                    'FK_SessionId=%s AND FK_VerificationId=%s')
         args = (participant_id, verification_id,)
         with self.__get_connection() as con:
             cur = con.cursor()
@@ -426,13 +458,14 @@ class DBUtils(Singleton):
                     "question_cba": res[1],
                     "question_caa": res[2],
                     "question_de": res[3],
-                    "question_cl": res[4],
-                    "matrix_pe": res[5],
-                    "matrix_co": res[6],
-                    "matrix_er": res[7],
-                    "matrix_cs": res[8],
-                    "end_time": res[9],
-                    "time_spent": res[10]
+                    "matrix_pe": res[4],
+                    "matrix_co": res[5],
+                    "matrix_cs": res[6],
+                    "matrix_rank_sq": res[7],
+                    "matrix_rank_pc": res[8],
+                    "matrix_rank_tc": res[9],
+                    "matrix_rank_cs": res[10],
+                    "matrix_rank_ne": res[11],
                 }
             else:
                 return None
@@ -451,14 +484,12 @@ class DBUtils(Singleton):
                 return {"answer_time_s": (res[1] - res[0]).seconds, "participant_status": participant_status}
             else:
                 return None
-
-    def invalidate_session_partially(self, participant_id):
-        self.delete_participant_interests(participant_id)
+    
+    def invalidate_session_no_deletion_interests(self, participant_id):
+        self.delete_session(participant_id)
         self.update_participant_status(participant_id, 'new')
 
-    def invalidate_session(self, participant_id):
-        self.delete_session(participant_id)
-        self.delete_participant_interests(participant_id)
+    def invalidate_session_no_deletion(self, participant_id):
         self.update_participant_status(participant_id, 'new')
 
     def check_session_is_valid(self, participant_id):
@@ -472,7 +503,7 @@ class DBUtils(Singleton):
             if session_res["is_prolific"]:
                 is_valid = True
             else:
-                inside_time_limit = session_res["last_update_time"] + datetime.timedelta(minutes=20) > datetime.datetime.now()
+                inside_time_limit = session_res["last_update_time"] + datetime.timedelta(minutes=60) > datetime.datetime.now()
                 is_valid = inside_time_limit
         else:
             is_valid = False

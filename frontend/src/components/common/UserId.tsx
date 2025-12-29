@@ -1,23 +1,14 @@
-export default function updateUserId (searchParams: URLSearchParams, setPayload: (data: any) => void, setProlificId: (id: string) => void, setParticipantId: (id: string) => void, setPassword: (password: string) => void, router: any) : [string, string, string] {
+import { use } from "react";
+
+export default function updateUserId (searchParams: URLSearchParams, setProlificId: (id: string) => void, setParticipantId: (id: string) => void, setUserSessionID: (password: string) => void, router: any) : [string, string, string] {
     let prolificId = "";
-    let password = "";
+    let userSessionID = "";
     if (searchParams.get("PROLIFIC_ID") === null) {
         if (typeof window === "undefined") {
             throw new Error("window is undefined");
         }
-        const raw = sessionStorage.getItem("survey:payload");
-        if (raw) {
-            try {
-                let data = JSON.parse(raw);
-                setPayload(data);
-                setPassword(data.password);
-                password = data.password;
-            } catch {
-                throw new Error("Error parsing payload from sessionStorage");
-            }
-        } else {
-            window.location.href = `https://app.prolific.com/submissions/complete?cc=${urlCode}`;
-        }
+        userSessionID = sessionStorage.getItem('userSessionID')!;
+        setUserSessionID(userSessionID);
     } else {
         prolificId = searchParams.get("PROLIFIC_ID") || "";
         if (prolificId === "") {
@@ -29,7 +20,7 @@ export default function updateUserId (searchParams: URLSearchParams, setPayload:
 
     // const queryParams = new URLSearchParams(window.location.search);
     // const pId = queryParams.get("PROLIFIC_ID") || "";
-    let pId = password !== "" ? password : prolificId;
+    let pId = userSessionID !== "" ? userSessionID : prolificId;
     setParticipantId(pId);
-    return [prolificId, password, pId];
+    return [prolificId, userSessionID, pId];
 }

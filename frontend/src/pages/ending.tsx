@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import updateUserId from '@/components/common/UserId';
 import { useSearchParams } from 'next/navigation';
-import { SurveyPayload } from '@/components/common/Models';
+import { getParticipantStatus } from  '@/components/common/API';
 
 export default function EndingPage() {
     const router = useRouter();
@@ -18,22 +18,10 @@ export default function EndingPage() {
     //     'default' : 'CKGSLL86'
     // }
 
-    const [password, setPassword] = useState<string>("");
+    const [userSessionID, setUserSessionID] = useState<string>("");
     const [prolificId, setProlificId] = useState<string>("");
     const [participantId, setParticipantId] = useState<string>("");
-    // const [participantGroup, setParticpantGroup] = useState('');
-    
-    const [payload, setPayload] = useState<SurveyPayload | null>(null);
 
-    const setParticipantStatus = async (pId: string, status: string) => {
-        const response = await fetch('/api/set_participant_status/', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({'pId': pId, 'status': status})
-        });
-        const data = await response.json();
-        return data;
-    };
 
     const endClick = () => {
         // TODO: Get participant id from payload or password and only set redirection if participant id equals prolific id
@@ -49,23 +37,41 @@ export default function EndingPage() {
         }
     }
 
-    const getParticipantGroup = async (pId: string) => {
-        const response = await fetch(`/api/get_participant_group/${pId}`);
-        const data = await response.json();
-        return data;
-    };
-
     useEffect(() => {
-        updateUserId(searchParams, setPayload, setProlificId, setParticipantId, setPassword, router);
-        
+        let [localProlificId, localUserSessionID, localPId] = updateUserId(searchParams, setProlificId, setParticipantId, setUserSessionID, router);
+
+        if (localPId === "" || localPId === null) {
+            alert("Sua sessão está inválida. Por favor, acesse o link recebido da survey novamente.");
+            router.push("/");
+            return;
+        }
+
+        try {
+            getParticipantStatus(localPId).then((participantStatusData) => {
+                switch (participantStatusData.status) {
+                    case 'completed':
+                        break
+                    default:
+                        // If the participant reached the ending page without completing the survey, redirect to the survey page
+                        let surveyRoute = localUserSessionID !== "" ? `/survey` : `/survey/?PROLIFIC_ID=${localProlificId}`;
+                        router.push(surveyRoute);
+                        return;
+                }
+            });
+        } catch (error) {
+            console.error(error);
+        }
     }, []);
 
     return (
         <div id="ending">
             <h1>Muito obrigado pela sua participação!</h1>
-            <h3>Para finalizar o survey clique no botão abaixo, caso você seja um usuário do prolific você será redirecionado
-                de volta ao Prolific.</h3>
-            <button onClick={endClick}>Finalizar</button>
+            {prolificId !== "" &&
+                <div>
+                    <h3>Para finalizar o survey clique no botão abaixo e você será redirecionado de volta ao Prolific para completar sua participação.</h3>
+                    <button onClick={endClick}>Finalizar</button>
+                </div>
+            }
         </div>
     )
 }

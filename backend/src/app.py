@@ -7,18 +7,29 @@ from src.lib.db_utils import DBUtils
 from datetime import datetime
 from src.lib.utils import create_hash, verify_hash
 
+from dotenv import load_dotenv
+load_dotenv()
+
+assert os.environ.get('DATA_PATH') is not None, "DATA_PATH environment variable must be set"
+assert os.environ.get('FRONTEND_HOST') is not None, "FRONTEND_HOST environment variable must be set"
+assert os.environ.get('FRONTEND_PORT') is not None, "FRONTEND_PORT environment variable must be set"
+assert os.environ.get('BACKEND_PORT') is not None, "BACKEND_PORT environment variable must be set"
+DATA_PATH = os.environ['DATA_PATH']
+FRONTEND_HOST = os.environ['FRONTEND_HOST']
+FRONTEND_PORT = os.environ['FRONTEND_PORT']
+BACKEND_PORT = os.environ['BACKEND_PORT']
+
 os.chdir(os.path.dirname(__file__))
 app = Flask(__name__)
 
-# Enable CORS for the frontend origin (Next.js dev server on port 3000)
+# Enable CORS for the frontend origin (Next.js dev server on port 'FRONTEND_PORT')
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "origins": "*",
         "methods": ["GET", "POST", "PUT", "OPTIONS"],
         "allow_headers": ["Content-Type"]
     }
 })
-DATA_PATH = '../data/log/'
 
 db_utils = DBUtils()
 
@@ -80,23 +91,27 @@ def create_participant():
     participant_hash = create_hash(participant_id)
     save_2_log(f'Trying to create participant {participant_hash}')
     res = db_utils.get_participant_status(participant_hash)
+
+    # There is a participant present
     if res is not None:
+        # Finished the survey
         if res == "completed":
             save_2_log(f'Participant {participant_hash} already completed the survey, not creating new session')
             return jsonify({'message': f'Participant {participant_hash} already completed the survey', "completed": True}), 400
-        if db_utils.get_session(participant_hash) is None:
-            save_2_log(f'Participant {participant_hash} already exists without session, recreating session and updating participant interests')
-            db_utils.create_participant_interests(participant_hash, interestsMatrix)
-            db_utils.create_session(participant_hash, current_time, is_prolific)
-            return jsonify({'message': f'Participant {participant_hash} already exists, new session created'}), 200
         else:
-            save_2_log(f'Participant {participant_hash} already exists with session')
-            return jsonify({'message': f'Participant {participant_hash} already exists with valid session'}), 200
+            session_is_valid, session_data = _validate_session(participant_hash)
+            if session_is_valid:
+                save_2_log(f'Participant {participant_hash} already exists with valid session, not creating new session')
+                return jsonify({'message': f'Participant {participant_hash} already exists with valid session'}), 200
+            else:
+                save_2_log(f'Participant {participant_hash} already exists with invalid session, recreating session')
+                db_utils.create_session(participant_hash, current_time, is_prolific)
+                return jsonify({'message': f'Participant {participant_hash} already exists with invalid session, session was recreated'})
 
     db_utils.create_participant(participant_hash, political_leaning)
     db_utils.create_participant_interests(participant_hash, interestsMatrix)
     db_utils.create_session(participant_hash, current_time, is_prolific)
-    return jsonify({'message': f'Participant {participant_hash} created'})
+    return jsonify({'message': f'Participant {participant_hash} and session created'})
 
 def _validate_session(participant_hash):
     validity_res = db_utils.check_session_is_valid(participant_hash)
@@ -105,10 +120,10 @@ def _validate_session(participant_hash):
     if not validity_res["is_valid"]:
         if validity_res["session_exists"]:
             save_2_log(f'Session for participant {participant_hash} was found as invalid, deleting session and participant interests')
-            db_utils.invalidate_session(participant_hash)
+            db_utils.invalidate_session_no_deletion_interests(participant_hash)
         else:
-            save_2_log(f'Session for participant {participant_hash} is not valid and does not exist, trying to delete participant interests')
-            db_utils.invalidate_session_partially(participant_hash)
+            save_2_log(f'Session for participant {participant_hash} is not valid and does not exist, just updating participant status')
+            db_utils.invalidate_session_no_deletion(participant_hash)
 
         data = jsonify({'message': f'Session for participant {participant_hash} is not valid', "validity_res": validity_res}), 400
         valid = False
@@ -166,6 +181,7 @@ def update_answer():
     participant_id = data.get('pId')
     page_number = data.get('pageNumber')
     answers = data.get('answers', {})
+    in_initial_question = data.get('inFirstSection', True)
 
     if not participant_id:
         return jsonify({'message': 'pId is required'}), 400
@@ -179,7 +195,7 @@ def update_answer():
     if not session_is_valid:
         return session_data
 
-    db_utils.update_answer(participant_hash, page_number, answers)
+    db_utils.update_answer(participant_hash, page_number, answers, in_initial_question)
     save_2_log(f'Updating answer for participant {participant_hash} on page {page_number} with answers {answers}')
     return jsonify({'message': f'Answer for participant {participant_hash} on page {page_number} updated'})
 
@@ -221,4 +237,4 @@ def get_participant_answer_time():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False, port=int(BACKEND_PORT))
