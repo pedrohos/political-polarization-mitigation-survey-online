@@ -79,6 +79,7 @@ export default function Home() {
       </div>
       <Index
         prolificId={prolificId}
+        key={prolificId}
       />
       <SeguirButton clickHandler={nextButtonHandler} />
     </main>
