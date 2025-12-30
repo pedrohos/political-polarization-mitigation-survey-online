@@ -254,11 +254,12 @@ class DBUtils(Singleton):
             self.increase_verification_num_uses(verification_id3, 1)
             self.increase_verification_num_uses(verification_id4, 1)
         except Exception as e1:
-            try:
-                self.delete_participant_interests(participant_id)
-                self.update_participant_status(participant_id, 'new')
-            except Exception as e2:
-                raise e1
+            # try:
+            self.delete_participant_interests(participant_id)
+            self.update_participant_status(participant_id, 'new')
+            raise e1
+            # except Exception as e2:
+            #     raise e1
 
 
     def get_session(self, participant_id):
