@@ -249,7 +249,7 @@ export default function Survey() {
 
     // button handlers
     const handleNextButton = async () => {
-        debugger;
+        // debugger;
         if ((!hasAllAnswersFirstSection() && inFirstSection && !disableFirstSection) || (!hasAllAnswersSecondSection() && !inFirstSection)) {
             alert("Por favor, responda todas as perguntas antes de prosseguir.");
         } else {

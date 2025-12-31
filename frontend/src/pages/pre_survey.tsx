@@ -10,7 +10,6 @@ import exampleImg from '../figs/survey-example.jpg';
 import LoadingMessage from "@/components/survey/LoadingMessage";
 import pushPayload from "@/components/common/Payload";
 import UserInfo from "@/components/pre_survey/UserInfo";
-import { getParticipantStatus, addParticipant } from "@/components/common/API";
 
 function getCurrentTime() {
   return new Date().toISOString().replace("Z", "");
