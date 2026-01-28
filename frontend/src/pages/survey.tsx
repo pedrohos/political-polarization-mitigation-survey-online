@@ -295,7 +295,7 @@ export default function Survey() {
 
             setParticipantStatus(participantId, nextState).then(() => {
                 if (nextState === "completed") {
-                    const endingRoute = userSessionID !== "" ? `/ending` : `/ending/?PROLIFIC_ID=${prolificId}`;
+                    const endingRoute = userSessionID !== "" ? `/ending` : `/ending/?PROLIFIC_PID=${prolificId}`;
                     pushPayloadAndPushRoute(userSessionID, endingRoute);
                     return;
                 } else {
@@ -450,7 +450,7 @@ export default function Survey() {
                         });
                         break;
                     case 'completed':
-                        const endingRoute = localUserSessionID !== "" ? `/ending` : `/ending/?PROLIFIC_ID=${localProlificId}`;
+                        const endingRoute = localUserSessionID !== "" ? `/ending` : `/ending/?PROLIFIC_PID=${localProlificId}`;
                         pushPayloadAndPushRoute(localUserSessionID, endingRoute);
                         return;
                     default:

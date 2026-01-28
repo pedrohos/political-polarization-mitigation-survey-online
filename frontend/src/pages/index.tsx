@@ -38,9 +38,9 @@ export default function Home() {
     setIsLoading(true);
     try {
       getParticipantStatus(idToCheck).then((data) => {
-        let preSurveyRoute = nonProlificUser ? `/pre_survey` : `/pre_survey/?PROLIFIC_ID=${idToCheck}`;
-        let surveyRoute = nonProlificUser ? `/survey` : `/survey/?PROLIFIC_ID=${idToCheck}`;
-        let endingRoute = nonProlificUser ? `/ending` : `/ending/?PROLIFIC_ID=${idToCheck}`;
+        let preSurveyRoute = nonProlificUser ? `/pre_survey` : `/pre_survey/?PROLIFIC_PID=${idToCheck}`;
+        let surveyRoute = nonProlificUser ? `/survey` : `/survey/?PROLIFIC_PID=${idToCheck}`;
+        let endingRoute = nonProlificUser ? `/ending` : `/ending/?PROLIFIC_PID=${idToCheck}`;
         
         switch (data.status) {
           case 'in_progress_a1':
@@ -66,7 +66,7 @@ export default function Home() {
 
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
-    const pId = queryParams.get("PROLIFIC_ID") || "";
+    const pId = queryParams.get("PROLIFIC_PID") || "";
     setProlificId(pId || "");
   },[]);
 

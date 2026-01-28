@@ -54,8 +54,8 @@ export default function PreSurvey() {
 
     try {
       getParticipantStatus(idToCheck).then((data) => {
-        let surveyRoute = nonProlificUser ? `/survey` : `/survey/?PROLIFIC_ID=${idToCheck}`;
-        let endingRoute = nonProlificUser ? `/ending` : `/ending/?PROLIFIC_ID=${idToCheck}`;
+        let surveyRoute = nonProlificUser ? `/survey` : `/survey/?PROLIFIC_PID=${idToCheck}`;
+        let endingRoute = nonProlificUser ? `/ending` : `/ending/?PROLIFIC_PID=${idToCheck}`;
 
         const isProlific = !nonProlificUser;
 
@@ -88,7 +88,7 @@ export default function PreSurvey() {
 
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
-    const pId = queryParams.get("PROLIFIC_ID") || "";
+    const pId = queryParams.get("PROLIFIC_PID") || "";
     setProlificId(pId || "");
 
     var localUserSessionID = "";
@@ -108,8 +108,8 @@ export default function PreSurvey() {
 
     setIsLoading(true);
     getParticipantStatus(idToCheck).then((data) => {
-      let surveyRoute = nonProlificUser ? `/survey` : `/survey/?PROLIFIC_ID=${idToCheck}`;
-      let endingRoute = nonProlificUser ? `/ending` : `/ending/?PROLIFIC_ID=${idToCheck}`;
+      let surveyRoute = nonProlificUser ? `/survey` : `/survey/?PROLIFIC_PID=${idToCheck}`;
+      let endingRoute = nonProlificUser ? `/ending` : `/ending/?PROLIFIC_PID=${idToCheck}`;
 
       if (data.status !== null) {
         if (data.status.startsWith("in_progress")) {

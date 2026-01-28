@@ -53,7 +53,7 @@ export default function EndingPage() {
                         break
                     default:
                         // If the participant reached the ending page without completing the survey, redirect to the survey page
-                        let surveyRoute = localUserSessionID !== "" ? `/survey` : `/survey/?PROLIFIC_ID=${localProlificId}`;
+                        let surveyRoute = localUserSessionID !== "" ? `/survey` : `/survey/?PROLIFIC_PID=${localProlificId}`;
                         router.push(surveyRoute);
                         return;
                 }
