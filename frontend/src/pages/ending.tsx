@@ -29,8 +29,7 @@ export default function EndingPage() {
         if (prolificId !== "") {
             redirectToProlific = true;
             if (redirectToProlific) {
-                const urlCode = "INSERT_HERE_COMPLETE_CODE";
-                window.location.href = `https://app.prolific.com/submissions/complete?cc=${urlCode}`;
+                window.location.href = `https://app.prolific.com/submissions/complete?cc=C1E9DY6R`;
             }
         } else {
             alert("Parece que você não acessou o survey pelo Prolific. Se isso estiver certo, pode fechar a página, obrigado pela participação! Caso você seja um usuário do Prolific, por favor acesse novamente o link da pesquisa.");
